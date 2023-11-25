@@ -42,51 +42,23 @@ names(state_ids) = state_names
 
 election_data =  data.frame(state_ids[polls_us_election_2016$state], 
                             polls_us_election_2016$samplesize, 
-                            y_clinton, y_trump, y_johnson)
+                            as.integer(y_clinton), 
+                            as.integer(y_trump), 
+                            as.integer(y_johnson))
 names(election_data) <- c("state","samplesize","y_clinton","y_trump","y_johnson")
+election_data = na.omit(election_data)
 ```
 
+```{r, message=FALSE}
+stan_data = list(N_observations=nrow(election_data),
+                 N_states=length(unique(election_data$state)), 
+                 samplesize = election_data$samplesize,
+                 state_idx = election_data$state, 
+                 y_clinton = election_data$y_clinton,
+                 y_trump = election_data$y_trump,
+                 y_johnson = election_data$y_johnson)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+pooled_model = cmdstan_model("huy_project_pooled_model.stan")
+fit_pooled <- pooled_model$sample(data = stan_data, refresh=0, show_messages=FALSE)
+```
 
