@@ -1,0 +1,92 @@
+---
+title: "BDA - Project"
+author: "Anonymous"
+output:
+  html_document:
+    toc: yes
+    toc_depth: '1'
+    df_print: paged
+  pdf_document:
+    toc: yes
+    toc_depth: 1
+urlcolor: blue
+---
+
+```{r, include=FALSE}
+library(aaltobda)
+library(bayesplot)
+library(cmdstanr)
+library(dplyr)
+library(ggplot2)
+library(ggdist) # for stat_dotsinterval
+library(posterior)
+library(brms)
+# Set more readable themes with bigger font for plotting packages.
+ggplot2::theme_set(theme_minimal(base_size = 14))
+bayesplot::bayesplot_theme_set(theme_minimal(base_size = 14))
+# This registers CmdStan as the backend for compiling cmdstan-chunks.
+check_cmdstan_toolchain(fix = TRUE, quiet = TRUE)
+register_knitr_engine(override = FALSE)
+```
+
+```{r}
+library(dslabs)
+data("polls_us_election_2016")
+y_clinton = polls_us_election_2016$samplesize*polls_us_election_2016$rawpoll_clinton/100
+y_trump = polls_us_election_2016$samplesize*polls_us_election_2016$rawpoll_trump/100
+y_johnson = polls_us_election_2016$samplesize*polls_us_election_2016$rawpoll_johnson/100
+
+state_names = unique(polls_us_election_2016$state)
+state_ids = c(1:length(state_names))
+names(state_ids) = state_names
+
+election_data =  data.frame(state_ids[polls_us_election_2016$state], 
+                            polls_us_election_2016$samplesize, 
+                            y_clinton, y_trump, y_johnson)
+names(election_data) <- c("state","samplesize","y_clinton","y_trump","y_johnson")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
