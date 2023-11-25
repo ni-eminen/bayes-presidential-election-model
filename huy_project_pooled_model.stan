@@ -1,11 +1,11 @@
 data {
-  int<lower=0> N_observations;
-  int<lower=0> N_states;
+  int<lower=0> N_observations;           // Number of data points
+  int<lower=0> N_states;                 // Number of states
   array[N_observations] int samplesize;
-  array[N_observations] int state_idx; // Pair observations to their diets.
-  vector[N_observations] y_clinton;
-  vector[N_observations] y_trump;
-  vector[N_observations] y_johnson;
+  array[N_observations] int state_idx;
+  array[N_observations] int y_clinton;
+  array[N_observations] int y_trump;
+  array[N_observations] int y_johnson;
 }
 
 
@@ -16,19 +16,25 @@ parameters {
 
 
 transformed parameters {
-  vector[N_states] theta_clinton = a;
-  vector[N_states] theta_trump = b*(1-a);
-  vector[N_states] theta_johnson = 1 - a - b(1-a);
+  vector[N_states] theta_clinton;
+  vector[N_states] theta_trump;
+  vector[N_states] theta_johnson;
+  
+  for (n in 1:N_states) {
+    theta_clinton[n] = a[n];
+    theta_trump[n] = b[n]*(1-a[n]);
+    theta_johnson[n] = 1 - a[n] - b[n]*(1-a[n]);
+  }
 }
 
 
 model {
   // Priors
-  a ~ beta(2,2);
-  b ~ beta(9,1);
+  a[state_idx] ~ beta(2,2);
+  b[state_idx] ~ beta(9,1);
   
   // Likelihood
-  y_clinton ~ binomial(samplesize, theta_clinton);
-  y_trump ~ binomial(samplesize, theta_trump);
-  y_trump ~ binomial(samplesize, theta_trump);
+  y_clinton ~ binomial(samplesize, theta_clinton[state_idx]);
+  y_trump ~ binomial(samplesize, theta_trump[state_idx]);
+  y_johnson ~ binomial(samplesize, theta_johnson[state_idx]);
 }
