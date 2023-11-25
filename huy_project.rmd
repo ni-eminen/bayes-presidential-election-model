@@ -16,6 +16,7 @@ urlcolor: blue
 library(aaltobda)
 library(bayesplot)
 library(cmdstanr)
+library(plyr)
 library(dplyr)
 library(ggplot2)
 library(ggdist) # for stat_dotsinterval
@@ -32,33 +33,96 @@ register_knitr_engine(override = FALSE)
 ```{r}
 library(dslabs)
 data("polls_us_election_2016")
-y_clinton = polls_us_election_2016$samplesize*polls_us_election_2016$rawpoll_clinton/100
-y_trump = polls_us_election_2016$samplesize*polls_us_election_2016$rawpoll_trump/100
-y_johnson = polls_us_election_2016$samplesize*polls_us_election_2016$rawpoll_johnson/100
 
-state_names = unique(polls_us_election_2016$state)
-state_ids = c(1:length(state_names))
-names(state_ids) = state_names
+rawdata = subset(polls_us_election_2016, 
+                 select=c(state, samplesize, 
+                          rawpoll_clinton, rawpoll_trump))
+rawdata = na.omit(rawdata)
 
-election_data =  data.frame(state_ids[polls_us_election_2016$state], 
-                            polls_us_election_2016$samplesize, 
-                            as.integer(y_clinton), 
-                            as.integer(y_trump), 
-                            as.integer(y_johnson))
-names(election_data) <- c("state","samplesize","y_clinton","y_trump","y_johnson")
-election_data = na.omit(election_data)
+y_clinton = rawdata$samplesize * rawdata$rawpoll_clinton /100
+y_trump = rawdata$samplesize * rawdata$rawpoll_trump /100
+
+election_data =  data.frame(as.integer(rawdata$state), 
+                            rawdata$samplesize, 
+                            as.integer(y_clinton),
+                            as.integer(y_trump))
+names(election_data) <- c("state","samplesize","y_clinton","y_trump")
 ```
 
-```{r, message=FALSE}
+
+```{r}
 stan_data = list(N_observations=nrow(election_data),
                  N_states=length(unique(election_data$state)), 
                  samplesize = election_data$samplesize,
                  state_idx = election_data$state, 
                  y_clinton = election_data$y_clinton,
-                 y_trump = election_data$y_trump,
-                 y_johnson = election_data$y_johnson)
+                 y_trump = election_data$y_trump)
+                 #y_johnson = election_data$y_johnson)
 
 pooled_model = cmdstan_model("huy_project_pooled_model.stan")
 fit_pooled <- pooled_model$sample(data = stan_data, refresh=0, show_messages=FALSE)
 ```
+
+
+```{r, include=FALSE}
+ndraws <- nrow(fit_pooled$sampler_diagnostics(format = "matrix"))
+theta_clinton_pooled = extract_variable(fit_pooled, "theta_clinton[1]")
+
+posterior_theta_clinton <- data.frame(
+  model_name = rep("Pooled", each = ndraws),
+  theta_clinton = c(theta_clinton_pooled))
+
+predicted_y_clinton <- data.frame(
+  model_name = rep("Pooled", each = ndraws),
+  predicted_y = c(extract_variable(fit_pooled, "y_clinton_pred[1]")))
+```
+
+
+```{r}
+ggplot(posterior_theta_clinton, aes(x = theta_clinton, y = model_name)) +
+  stat_dotsinterval(quantiles = 100, scale = .9) +
+  # Add title and axis labels. One line to make everything so much more clear!
+  labs(
+    title = "theta_clinton of U.S",
+    x = "y_clinton_pred",
+    y = "Model"
+  )
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
