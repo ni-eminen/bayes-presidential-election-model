@@ -1,7 +1,7 @@
 data {
   int<lower=0> N_observations;
   int<lower=0> N_states;
-  int<lower=0> samplesize;
+  array[N_observations] int samplesize;
   array[N_observations] int state_idx; // Pair observations to their diets.
   vector[N_observations] y_clinton;
   vector[N_observations] y_trump;
