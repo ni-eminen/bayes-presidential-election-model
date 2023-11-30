@@ -30,71 +30,110 @@ check_cmdstan_toolchain(fix = TRUE, quiet = TRUE)
 register_knitr_engine(override = FALSE)
 ```
 
+The data comes from `dslabs` library. In the preprocessing step, datapoints containing NA values are removed. The number of people voting for Clinton and Trump (integers) are then calculated.
+
 ```{r}
 library(dslabs)
 data("polls_us_election_2016")
 
-rawdata = subset(polls_us_election_2016, 
-                 select=c(state, samplesize, 
-                          rawpoll_clinton, rawpoll_trump))
-rawdata = na.omit(rawdata)
+rawdata = na.omit(subset(polls_us_election_2016, 
+                         select=c(state, samplesize, rawpoll_clinton, rawpoll_trump)))
 
-y_clinton = rawdata$samplesize * rawdata$rawpoll_clinton /100
-y_trump = rawdata$samplesize * rawdata$rawpoll_trump /100
+y_clinton = as.integer(rawdata$samplesize*rawdata$rawpoll_clinton/100)
+y_trump = as.integer(rawdata$samplesize*rawdata$rawpoll_trump/100)
 
-election_data =  data.frame(as.integer(rawdata$state), 
-                            rawdata$samplesize, 
-                            as.integer(y_clinton),
-                            as.integer(y_trump))
-names(election_data) <- c("state","samplesize","y_clinton","y_trump")
+election_data =  data.frame(as.integer(rawdata$state), rawdata$samplesize, y_clinton, y_trump)
+names(election_data) = c("state","samplesize","y_clinton","y_trump")
 ```
 
+Here, the 3 stan models are trained:
 
-```{r}
+```{r, message=FALSE}
 stan_data = list(N_observations=nrow(election_data),
                  N_states=length(unique(election_data$state)), 
                  samplesize = election_data$samplesize,
                  state_idx = election_data$state, 
                  y_clinton = election_data$y_clinton,
                  y_trump = election_data$y_trump)
-                 #y_johnson = election_data$y_johnson)
 
 pooled_model = cmdstan_model("huy_project_pooled_model.stan")
-fit_pooled <- pooled_model$sample(data = stan_data, refresh=0, show_messages=FALSE)
+fit_pooled = pooled_model$sample(data = stan_data, refresh=0, show_messages=FALSE)
+
+separate_model = cmdstan_model("huy_project_separate_model.stan")
+fit_separate = separate_model$sample(data = stan_data, refresh=0, show_messages=FALSE)
+
+hierarchical_model = cmdstan_model("huy_project_hierarchical_model.stan")
+fit_hierarchical = hierarchical_model$sample(data = stan_data, refresh=0, show_messages=FALSE)
 ```
 
+Draws from the 3 models for `theta_clinton[2]`:
 
-```{r, include=FALSE}
+```{r, message=FALSE}
 ndraws <- nrow(fit_pooled$sampler_diagnostics(format = "matrix"))
-theta_clinton_pooled = extract_variable(fit_pooled, "theta_clinton[1]")
+theta_clinton_pooled = extract_variable(fit_pooled, "theta_clinton[2]")
+theta_clinton_separate = extract_variable(fit_separate, "theta_clinton[2]")
+theta_clinton_hierarchical = extract_variable(fit_hierarchical, "theta_clinton[2]")
 
 posterior_theta_clinton <- data.frame(
-  model_name = rep("Pooled", each = ndraws),
-  theta_clinton = c(theta_clinton_pooled))
+  model_name = rep(c("Pooled", "Separate", "Hierarchical"), each = ndraws),
+  theta_clinton = c(theta_clinton_pooled, 
+                    theta_clinton_separate, 
+                    theta_clinton_hierarchical))
 
-predicted_y_clinton <- data.frame(
-  model_name = rep("Pooled", each = ndraws),
-  predicted_y = c(extract_variable(fit_pooled, "y_clinton_pred[1]")))
+ggplot(posterior_theta_clinton, aes(x = theta_clinton, y = model_name)) +
+  stat_dotsinterval(quantiles = 100, scale = .9) +
+  labs(title = "theta_clinton[2]", x = "theta_clinton", y = "Model")
+```
+
+Draws from the 3 models for `theta_clinton[50]`:
+
+```{r, message=FALSE}
+theta_clinton_pooled_50 = extract_variable(fit_pooled, "theta_clinton[50]")
+theta_clinton_separate_50 = extract_variable(fit_separate, "theta_clinton[50]")
+theta_clinton_hierarchical_50 = extract_variable(fit_hierarchical, "theta_clinton[50]")
+
+posterior_theta_clinton_50 <- data.frame(
+  model_name = rep(c("Pooled", "Separate", "Hierarchical"), each = ndraws),
+  theta_clinton_50 = c(theta_clinton_pooled_50, 
+                       theta_clinton_separate_50, 
+                       theta_clinton_hierarchical_50))
+
+ggplot(posterior_theta_clinton_50, aes(x = theta_clinton_50, y = model_name)) +
+  stat_dotsinterval(quantiles = 100, scale = .9) +
+  labs(title = "theta_clinton_50 (Rhode Island?)", x = "theta_clinton_50", y = "Model")
+```
+
+```{r}
+N_states=length(unique(election_data$state))
+variable_list = rep("variable_i", each=N_states)
+theta_clinton_pooled_list = data.frame(number=1:4000)
+theta_clinton_separate_list = data.frame(number=1:4000)
+theta_clinton_hierarchical_list = data.frame(number=1:4000)
+for (i in 1:N_states){
+  variable = paste("theta_clinton[",toString(i),"]",sep="")
+  theta_clinton_pooled = extract_variable(fit_pooled, variable)
+  theta_clinton_separate = extract_variable(fit_separate, variable)
+  theta_clinton_hierarchical = extract_variable(fit_hierarchical, variable)
+  
+  variable_list[i] = variable
+  theta_clinton_pooled_list[variable] = theta_clinton_pooled
+  theta_clinton_separate_list[variable] = theta_clinton_separate
+  theta_clinton_hierarchical_list[variable] = theta_clinton_hierarchical
+}
+theta_clinton_pooled_list = subset(theta_clinton_pooled_list, select=-c(number))
+theta_clinton_separate_list = subset(theta_clinton_separate_list, select=-c(number))
+theta_clinton_hierarchical_list = subset(theta_clinton_hierarchical_list, select=-c(number))
 ```
 
 
 ```{r}
-ggplot(posterior_theta_clinton, aes(x = theta_clinton, y = model_name)) +
-  stat_dotsinterval(quantiles = 100, scale = .9) +
-  # Add title and axis labels. One line to make everything so much more clear!
-  labs(
-    title = "theta_clinton of U.S",
-    x = "y_clinton_pred",
-    y = "Model"
-  )
+plot(1:N_states, colMeans(theta_clinton_pooled_list), 
+     xlab="state id", ylab="theta_clinton", col="red", pch=0, ylim=c(0,1))
+lines(1:N_states, colMeans(theta_clinton_separate_list), col="blue", type="p", pch=4)
+lines(1:N_states, colMeans(theta_clinton_hierarchical_list), col="orange", type="p", pch=2)
+legend(45, 1, legend=c("Pooled", "Separate", "Hierarchical"),
+       col=c("red","blue","orange"), pch=c(0,4,2))
 ```
-
-
-
-
-
-
-
 
 
 
