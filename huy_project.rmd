@@ -1,6 +1,6 @@
 ---
 title: "BDA - Project"
-author: "Anonymous"
+author: "Huy Nguyen, Matias Nieminen, Zehang Li"
 output:
   html_document:
     toc: yes
@@ -12,7 +12,7 @@ output:
 urlcolor: blue
 ---
 
-```{r, include=FALSE}
+```{r, message=FALSE}
 library(aaltobda)
 library(bayesplot)
 library(cmdstanr)
@@ -45,8 +45,8 @@ election_data =  data.frame(as.integer(rawdata$state), rawdata$samplesize, y_cli
 names(election_data) = c("state","samplesize","y_clinton","y_trump")
 ```
 
-Here, the 3 stan models are trained:
-```{r}
+Here, the 3 CmdStan models are trained, and the MCMC Inference is done with the `⁠$sample()`⁠ method.
+```{r, message=FALSE}
 stan_data = list(N_observations=nrow(election_data),
                  N_states=length(unique(election_data$state)), 
                  samplesize = election_data$samplesize,
@@ -54,56 +54,48 @@ stan_data = list(N_observations=nrow(election_data),
                  y_clinton = election_data$y_clinton,
                  y_trump = election_data$y_trump)
 
-pooled_model = cmdstan_model("huy_project_pooled_model.stan")
+pooled_model = cmdstan_model("project_pooled_model.stan")
 fit_pooled = pooled_model$sample(data = stan_data, refresh=0, show_messages=FALSE)
 
-#separate_model = cmdstan_model("huy_project_separate_model.stan")
-#fit_separate = separate_model$sample(data = stan_data, refresh=0, show_messages=FALSE)
+separate_model = cmdstan_model("project_separate_model.stan")
+fit_separate = separate_model$sample(data = stan_data, refresh=0, show_messages=FALSE)
 
-#hierarchical_model = cmdstan_model("huy_project_hierarchical_model.stan")
-#fit_hierarchical = hierarchical_model$sample(data = stan_data, refresh=0, show_messages=FALSE)
+hierarchical_model = cmdstan_model("project_hierarchical_model.stan")
+fit_hierarchical = hierarchical_model$sample(data = stan_data, refresh=0, show_messages=FALSE)
 ```
-The `⁠$sample()`⁠ method of a CmdStanModel object runs Stan's main Markov chain Monte Carlo algorithm.
 
 Draws from the 3 models for `theta_clinton[2]`:
 ```{r, message=FALSE}
 ndraws <- nrow(fit_pooled$sampler_diagnostics(format = "matrix"))
-theta_clinton_pooled = extract_variable(fit_pooled, "theta_clinton[2]")
-theta_clinton_separate = extract_variable(fit_separate, "theta_clinton[2]")
-theta_clinton_hierarchical = extract_variable(fit_hierarchical, "theta_clinton[2]")
-
-posterior_theta_clinton <- data.frame(
+posterior_theta_clinton_1 <- data.frame(
   model_name = rep(c("Pooled", "Separate", "Hierarchical"), each = ndraws),
-  theta_clinton = c(theta_clinton_pooled, 
-                    theta_clinton_separate, 
-                    theta_clinton_hierarchical))
+  theta_clinton_1 = c(extract_variable(fit_pooled, "theta_clinton[1]"), 
+                      extract_variable(fit_separate, "theta_clinton[1]"), 
+                      extract_variable(fit_hierarchical, "theta_clinton[1]")))
 
-ggplot(posterior_theta_clinton, aes(x = theta_clinton, y = model_name)) +
-  stat_dotsinterval(quantiles = 100, scale = .9) +
-  labs(title = "theta_clinton[2]", x = "theta_clinton", y = "Model")
+predictive_theta_clinton_1 <- data.frame(
+  model_name = rep(c("Pooled", "Separate", "Hierarchical"), each = ndraws),
+  theta_clinton_pred_1 = c(extract_variable(fit_pooled, "theta_clinton_pred[1]"),
+                           extract_variable(fit_separate, "theta_clinton_pred[1]"), 
+                           extract_variable(fit_hierarchical, "theta_clinton_pred[1]")))
 ```
 
-Draws from the 3 models for `theta_clinton[50]`:
-```{r, message=FALSE}
-theta_clinton_pooled_50 = extract_variable(fit_pooled, "theta_clinton[50]")
-theta_clinton_separate_50 = extract_variable(fit_separate, "theta_clinton[50]")
-theta_clinton_hierarchical_50 = extract_variable(fit_hierarchical, "theta_clinton[50]")
-
-posterior_theta_clinton_50 <- data.frame(
-  model_name = rep(c("Pooled", "Separate", "Hierarchical"), each = ndraws),
-  theta_clinton_50 = c(theta_clinton_pooled_50, 
-                       theta_clinton_separate_50, 
-                       theta_clinton_hierarchical_50))
-
-ggplot(posterior_theta_clinton_50, aes(x = theta_clinton_50, y = model_name)) +
+And plot them:
+```{r, fig.height=5, fig.width=8}
+ggplot(posterior_theta_clinton_1, aes(x = theta_clinton_1, y = model_name)) +
   stat_dotsinterval(quantiles = 100, scale = .9) +
-  labs(title = "theta_clinton_50 (Rhode Island?)", x = "theta_clinton_50", y = "Model")
+  labs(title = "posterior", x = "theta_clinton_1", y = "Model")
+```
+
+```{r, fig.height=5, fig.width=8}
+ggplot(predictive_theta_clinton_2, aes(x = theta_clinton_pred_2, y = model_name)) +
+  stat_dotsinterval(quantiles = 100, scale = .9) +
+  labs(title = "posterior predictive", x = "theta_clinton_pred_2", y = "Model")
 ```
 
 Draws from the 3 models for all `theta_clinton`:
 ```{r}
 N_states=length(unique(election_data$state))
-variable_list = rep("variable_i", each=N_states)
 theta_clinton_pooled_list = data.frame(number=1:4000)
 theta_clinton_separate_list = data.frame(number=1:4000)
 theta_clinton_hierarchical_list = data.frame(number=1:4000)
@@ -113,7 +105,6 @@ for (i in 1:N_states){
   theta_clinton_separate = extract_variable(fit_separate, variable)
   theta_clinton_hierarchical = extract_variable(fit_hierarchical, variable)
   
-  variable_list[i] = variable
   theta_clinton_pooled_list[variable] = theta_clinton_pooled
   theta_clinton_separate_list[variable] = theta_clinton_separate
   theta_clinton_hierarchical_list[variable] = theta_clinton_hierarchical
@@ -123,16 +114,43 @@ theta_clinton_separate_list = subset(theta_clinton_separate_list, select=-c(numb
 theta_clinton_hierarchical_list = subset(theta_clinton_hierarchical_list, select=-c(number))
 ```
 
-And plot them:
+And `theta_clinton_pred`:
 ```{r}
-plot(1:N_states, colMeans(theta_clinton_pooled_list), 
-     xlab="state id", ylab="theta_clinton", col="red", pch=0, ylim=c(0,1))
-lines(1:N_states, colMeans(theta_clinton_separate_list), col="blue", type="p", pch=4)
-lines(1:N_states, colMeans(theta_clinton_hierarchical_list), col="orange", type="p", pch=2)
-legend(45, 1, legend=c("Pooled", "Separate", "Hierarchical"),
-       col=c("red","blue","orange"), pch=c(0,4,2))
+N_states=length(unique(election_data$state))
+theta_clinton_pred_pooled_list = data.frame(number=1:4000)
+theta_clinton_pred_separate_list = data.frame(number=1:4000)
+theta_clinton_pred_hierarchical_list = data.frame(number=1:4000)
+for (i in 1:N_states){
+  variable = paste("theta_clinton_pred[",toString(i),"]",sep="")
+  theta_clinton_pred_pooled = extract_variable(fit_pooled, variable)
+  theta_clinton_pred_separate = extract_variable(fit_separate, variable)
+  theta_clinton_pred_hierarchical = extract_variable(fit_hierarchical, variable)
+  
+  theta_clinton_pred_pooled_list[variable] = theta_clinton_pred_pooled
+  theta_clinton_pred_separate_list[variable] = theta_clinton_pred_separate
+  theta_clinton_pred_hierarchical_list[variable] = theta_clinton_pred_hierarchical
+}
+theta_clinton_pred_pooled_list = subset(theta_clinton_pred_pooled_list, select=-c(number))
+theta_clinton_pred_separate_list = subset(theta_clinton_pred_separate_list, select=-c(number))
+theta_clinton_pred_hierarchical_list = subset(theta_clinton_pred_hierarchical_list, select=-c(number))
 ```
 
+And plot them:
+```{r, fig.height=6, fig.width=12}
+plot(1:N_states, colMeans(theta_clinton_pooled_list), 
+     xlab="state id", ylab="theta_clinton", col="red", ylim=c(0.2,0.8), type="l")
+lines(1:N_states, colMeans(theta_clinton_separate_list), col="blue", type="l")
+lines(1:N_states, colMeans(theta_clinton_hierarchical_list), col="orange", type="l")
+
+lines(1:N_states, colMeans(theta_clinton_pred_pooled_list), col="red", type="l", lty=2)
+lines(1:N_states, colMeans(theta_clinton_pred_separate_list), col="blue", type="l", lty=2)
+lines(1:N_states, colMeans(theta_clinton_pred_hierarchical_list), col="orange", type="l", lty=2)
+
+legend(45, 0.8, legend=c("posterior_pooled", "posterior_separate", "posterior_hierarchical", "predictive_pooled", "predictive_separate", "predictive_hierarchical"),
+       col=c("red","blue","orange", "red","blue","orange"), lty=c(1,1,1,2,2,2))
+```
+
+# Convergence analysis with Rhat and ESS
 ```{r}
 summary_pooled = fit_pooled$summary()
 rhat_values_pooled = summary_pooled[, "rhat"]
@@ -157,16 +175,67 @@ print(max(rhat_values_hierarchical))
 print(min(ess_hierarchical, na.rm=TRUE))
 ```
 
+# Model comparison with LOO-CV
 ```{r}
-post_pred_samples_pooled <- generate(fit_pooled)
-#observed_summary <- summary(observed_data)
-#post_pred_summary <- summary(post_pred_samples)
+loo_pooled = fit_pooled$loo(variables = "theta_clinton")
+loo_pooled
 ```
 
+```{r}
+loo_separate = fit_separate$loo(variables = "theta_clinton")
+loo_separate
+```
 
+```{r}
+loo_hierarchical = fit_hierarchical$loo(variables = "theta_clinton")
+loo_hierarchical
+```
 
+```{r}
+loo_compare(loo_pooled, loo_separate, loo_hierarchical)
+```
 
+# Sensitivity analysis
+Pooled and separate: Beta(9,1) and Beta(1,9) instead of Beta(2,2) and Beta(9,1)
+Hierarchical: Uniform(10,20) instead of Uniform(0,10)
+```{r, message=FALSE}
+pooled_model_2 = cmdstan_model("project_pooled_model - Copy.stan")
+fit_pooled_2 = pooled_model_2$sample(data = stan_data, refresh=0, show_messages=FALSE)
 
+separate_model_2 = cmdstan_model("project_separate_model - Copy.stan")
+fit_separate_2 = separate_model_2$sample(data = stan_data, refresh=0, show_messages=FALSE)
+
+hierarchical_model_2 = cmdstan_model("project_hierarchical_model - Copy.stan")
+fit_hierarchical_2 = hierarchical_model_2$sample(data = stan_data, refresh=0, show_messages=FALSE)
+```
+
+```{r, message=FALSE}
+theta_clinton_2_2 = c(extract_variable(fit_pooled_2, "theta_clinton[2]"), 
+                     extract_variable(fit_separate_2, "theta_clinton[2]"), 
+                     extract_variable(fit_hierarchical_2, "theta_clinton[2]"))
+posterior_theta_clinton_2_2 <- data.frame(
+  model_name = rep(c("Pooled_2", "Separate_2", "Hierarchical_2"), each = ndraws),
+  theta_clinton_2_2)
+
+theta_clinton_pred_2_2 = c(extract_variable(fit_pooled_2, "theta_clinton_pred[2]"),
+                            extract_variable(fit_separate_2, "theta_clinton_pred[2]"), 
+                            extract_variable(fit_hierarchical_2, "theta_clinton_pred[2]"))
+predictive_theta_clinton_2_2 <- data.frame(
+  model_name = rep(c("Pooled_2", "Separate_2", "Hierarchical_2"), each = ndraws),
+  theta_clinton_pred_2_2)
+```
+
+And plot them:
+```{r, fig.height=5, fig.width=8}
+ggplot(posterior_theta_clinton_2_2, aes(x = theta_clinton_2_2, y = model_name)) +
+  stat_dotsinterval(quantiles = 100, scale = .9) +
+  labs(title = "posterior - sensitivity analysis", x = "theta_clinton_2", y = "Model")
+```
+```{r, fig.height=5, fig.width=8}
+ggplot(predictive_theta_clinton_2_2, aes(x = theta_clinton_pred_2_2, y = model_name)) +
+  stat_dotsinterval(quantiles = 100, scale = .9) +
+  labs(title = "posterior predictive - sensitivity analysis", x = "theta_clinton_pred_2", y = "Model")
+```
 
 
 
