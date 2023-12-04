@@ -31,7 +31,6 @@ register_knitr_engine(override = FALSE)
 ```
 
 The data comes from `dslabs` library. In the preprocessing step, datapoints containing NA values are removed. The number of people voting for Clinton and Trump (integers) are then calculated.
-
 ```{r}
 library(dslabs)
 data("polls_us_election_2016")
@@ -47,8 +46,7 @@ names(election_data) = c("state","samplesize","y_clinton","y_trump")
 ```
 
 Here, the 3 stan models are trained:
-
-```{r, message=FALSE}
+```{r}
 stan_data = list(N_observations=nrow(election_data),
                  N_states=length(unique(election_data$state)), 
                  samplesize = election_data$samplesize,
@@ -59,15 +57,15 @@ stan_data = list(N_observations=nrow(election_data),
 pooled_model = cmdstan_model("huy_project_pooled_model.stan")
 fit_pooled = pooled_model$sample(data = stan_data, refresh=0, show_messages=FALSE)
 
-separate_model = cmdstan_model("huy_project_separate_model.stan")
-fit_separate = separate_model$sample(data = stan_data, refresh=0, show_messages=FALSE)
+#separate_model = cmdstan_model("huy_project_separate_model.stan")
+#fit_separate = separate_model$sample(data = stan_data, refresh=0, show_messages=FALSE)
 
-hierarchical_model = cmdstan_model("huy_project_hierarchical_model.stan")
-fit_hierarchical = hierarchical_model$sample(data = stan_data, refresh=0, show_messages=FALSE)
+#hierarchical_model = cmdstan_model("huy_project_hierarchical_model.stan")
+#fit_hierarchical = hierarchical_model$sample(data = stan_data, refresh=0, show_messages=FALSE)
 ```
+The `⁠$sample()`⁠ method of a CmdStanModel object runs Stan's main Markov chain Monte Carlo algorithm.
 
 Draws from the 3 models for `theta_clinton[2]`:
-
 ```{r, message=FALSE}
 ndraws <- nrow(fit_pooled$sampler_diagnostics(format = "matrix"))
 theta_clinton_pooled = extract_variable(fit_pooled, "theta_clinton[2]")
@@ -86,7 +84,6 @@ ggplot(posterior_theta_clinton, aes(x = theta_clinton, y = model_name)) +
 ```
 
 Draws from the 3 models for `theta_clinton[50]`:
-
 ```{r, message=FALSE}
 theta_clinton_pooled_50 = extract_variable(fit_pooled, "theta_clinton[50]")
 theta_clinton_separate_50 = extract_variable(fit_separate, "theta_clinton[50]")
@@ -103,6 +100,7 @@ ggplot(posterior_theta_clinton_50, aes(x = theta_clinton_50, y = model_name)) +
   labs(title = "theta_clinton_50 (Rhode Island?)", x = "theta_clinton_50", y = "Model")
 ```
 
+Draws from the 3 models for all `theta_clinton`:
 ```{r}
 N_states=length(unique(election_data$state))
 variable_list = rep("variable_i", each=N_states)
@@ -125,7 +123,7 @@ theta_clinton_separate_list = subset(theta_clinton_separate_list, select=-c(numb
 theta_clinton_hierarchical_list = subset(theta_clinton_hierarchical_list, select=-c(number))
 ```
 
-
+And plot them:
 ```{r}
 plot(1:N_states, colMeans(theta_clinton_pooled_list), 
      xlab="state id", ylab="theta_clinton", col="red", pch=0, ylim=c(0,1))
@@ -135,13 +133,35 @@ legend(45, 1, legend=c("Pooled", "Separate", "Hierarchical"),
        col=c("red","blue","orange"), pch=c(0,4,2))
 ```
 
+```{r}
+summary_pooled = fit_pooled$summary()
+rhat_values_pooled = summary_pooled[, "rhat"]
+ess_pooled = summary_pooled[, "ess_tail"]
+print(max(rhat_values_pooled))
+print(min(ess_pooled, na.rm=TRUE))
+```
 
+```{r}
+summary_separate = fit_separate$summary()
+rhat_values_separate = summary_separate[, "rhat"]
+ess_separate = summary_separate[, "ess_tail"]
+print(max(rhat_values_separate))
+print(min(ess_separate, na.rm=TRUE))
+```
 
+```{r}
+summary_hierarchical = fit_hierarchical$summary()
+rhat_values_hierarchical = summary_hierarchical[, "rhat"]
+ess_hierarchical = summary_hierarchical[, "ess_tail"]
+print(max(rhat_values_hierarchical))
+print(min(ess_hierarchical, na.rm=TRUE))
+```
 
-
-
-
-
+```{r}
+post_pred_samples_pooled <- generate(fit_pooled)
+#observed_summary <- summary(observed_data)
+#post_pred_summary <- summary(post_pred_samples)
+```
 
 
 
