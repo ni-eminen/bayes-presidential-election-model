@@ -41,7 +41,11 @@ model {
 
 
 generated quantities {
-  array[N_observations] int y_clinton_pred;
-  y_clinton_pred = binomial_rng(samplesize, theta_clinton[state_idx]);
+  vector[N_observations] theta_clinton_pred;
+  vector[N_observations] theta_trump_pred;
+  for (n in 1:N_observations) {
+    theta_clinton_pred[n] = binomial_rng(samplesize[n], theta_clinton[state_idx[n]])*1.0/samplesize[n];
+    theta_trump_pred[n] = binomial_rng(samplesize[n], theta_trump[state_idx[n]])*1.0/samplesize[n];
+  }
 }
 
